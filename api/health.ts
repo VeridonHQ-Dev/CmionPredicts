@@ -8,10 +8,14 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
+  const rawKey = process.env.GEMINI_API_KEY;
+  const isKeyConfigured = Boolean(
+    rawKey && rawKey !== "MY_GEMINI_API_KEY" && rawKey.trim().length > 10
+  );
+
   res.status(200).json({
     status: "ok",
-    hasGeminiApiKey: Boolean(
-      process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY"
-    ),
+    hasGeminiApiKey: isKeyConfigured,
+    keyPrefix: isKeyConfigured ? `${rawKey!.trim().slice(0, 6)}...` : "none",
   });
 }

@@ -383,23 +383,24 @@ export async function runFootballPrediction(rawInput: string): Promise<SquadPred
   const { teams, fixtures: rawFixtures } = extractTeamsAndMatches(rawInput);
   const identifiedTeams = teams.length > 0 ? teams : ["Manchester United", "Bayern Munich", "Slavia Prague", "Lens"];
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  let useLiveAi = false;
-  let aiResult: any = null;
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    let useLiveAi = false;
+    let aiResult: any = null;
 
-  // Try Gemini AI models with automatic fallback across models if high demand (503) occurs
-  if (apiKey && apiKey !== "MY_GEMINI_API_KEY" && apiKey.trim().length > 10) {
-    try {
-      const ai = new GoogleGenAI({
-        apiKey: apiKey.trim(),
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build'
+    // Try Gemini AI models with automatic fallback across models if high demand (503) occurs
+    if (apiKey && apiKey !== "MY_GEMINI_API_KEY" && apiKey.trim().length > 10) {
+      try {
+        const ai = new GoogleGenAI({
+          apiKey: apiKey.trim(),
+          httpOptions: {
+            headers: {
+              'User-Agent': 'aistudio-build'
+            }
           }
-        }
-      });
+        });
 
-      const prompt = `You are CmionPredicts, an elite sports analytics and fantasy football AI engine.
+        const prompt = `You are CmionPredicts, an elite sports analytics and fantasy football AI engine.
 Task: Analyze these football teams and their upcoming matches: ${JSON.stringify(identifiedTeams)}.
 
 Instructions:
@@ -465,50 +466,63 @@ Instructions:
   ]
 }`;
 
-      // Candidate models in order of priority (lite model is fast and resilient against 503 high demand)
-      const candidateModels = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"];
+        // Fast, active candidate models with a 4-second safety ceiling
+        const candidateModels = ["gemini-3.6-flash", "gemini-flash-latest"];
 
-      for (const model of candidateModels) {
-        try {
-          const response = await ai.models.generateContent({
-            model,
-            contents: prompt,
-            config: {
-              systemInstruction: "You are the CmionPredicts prediction engine. Always return strictly valid JSON. Maintain statistical honesty. Ensure squad contains exactly 2 GK, 5 DEF, 5 MID, 3 FWD.",
-              responseMimeType: "application/json"
-            }
-          });
+        for (const model of candidateModels) {
+          try {
+            let timeoutHandle: any;
+            const timeoutPromise = new Promise((_, reject) => {
+              timeoutHandle = setTimeout(() => reject(new Error("AI generation safety timeout")), 4000);
+              if (typeof timeoutHandle?.unref === "function") timeoutHandle.unref();
+            });
 
-          if (response?.text) {
-            const parsed = JSON.parse(response.text.trim());
-            if (parsed.players && Array.isArray(parsed.players) && parsed.players.length === 15) {
-              aiResult = parsed;
-              useLiveAi = true;
-              break; // Succeeded!
+            const apiCallPromise = ai.models.generateContent({
+              model,
+              contents: prompt,
+              config: {
+                systemInstruction: "You are the CmionPredicts prediction engine. Always return strictly valid JSON. Maintain statistical honesty. Ensure squad contains exactly 2 GK, 5 DEF, 5 MID, 3 FWD.",
+                responseMimeType: "application/json"
+              }
+            });
+
+            const response: any = await Promise.race([apiCallPromise, timeoutPromise]);
+            clearTimeout(timeoutHandle);
+
+            if (response?.text) {
+              const parsed = JSON.parse(response.text.trim());
+              if (parsed.players && Array.isArray(parsed.players) && parsed.players.length === 15) {
+                aiResult = parsed;
+                useLiveAi = true;
+                break; // Succeeded!
+              }
             }
+          } catch {
+            // If model is busy (503), rate-limited, or exceeds 4s, proceed immediately
+            continue;
           }
-        } catch {
-          // Continue to next candidate model if current candidate is rate-limited or busy
-          continue;
         }
+      } catch (aiInitErr) {
+        console.warn("[CmionPredicts] Note: AI initialization fallback triggered:", aiInitErr);
       }
-    } catch (aiInitErr) {
-      console.warn("[CmionPredicts] Note: AI initialization fallback triggered:", aiInitErr);
     }
-  }
 
-  // If live AI produced valid 15-man squad, format and validate it
-  if (useLiveAi && aiResult) {
-    try {
-      const formatted = formatAiResult(aiResult, identifiedTeams, rawFixtures);
-      if (formatted) return formatted;
-    } catch (formatErr) {
-      console.warn("[CmionPredicts] Formatting AI result fell back to statistical engine:", formatErr);
+    // If live AI produced valid 15-man squad, format and validate it
+    if (useLiveAi && aiResult) {
+      try {
+        const formatted = formatAiResult(aiResult, identifiedTeams, rawFixtures);
+        if (formatted) return formatted;
+      } catch (formatErr) {
+        console.warn("[CmionPredicts] Formatting AI result fell back to statistical engine:", formatErr);
+      }
     }
-  }
 
-  // Otherwise, use our pre-calibrated intelligence engine
-  return buildStatisticalPrediction(identifiedTeams, rawFixtures);
+    // Otherwise, use our pre-calibrated statistical intelligence engine
+    return buildStatisticalPrediction(identifiedTeams, rawFixtures);
+  } catch (err) {
+    console.error("[CmionPredicts] Top-level fallback triggered:", err);
+    return buildStatisticalPrediction(identifiedTeams, rawFixtures);
+  }
 }
 
 function normalizeAiPlayer(p: any, idx: number, defaultClub: string): PlayerPrediction {
