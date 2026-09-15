@@ -1,0 +1,6 @@
+{
+  "name": "CP | CmionPredicts",
+  "description": "AI-powered football fantasy prediction engine. Predict. Analyze. Select the best 15-player squad and Starting XI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
