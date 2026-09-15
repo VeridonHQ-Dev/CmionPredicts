@@ -78,7 +78,8 @@ export default function App() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to generate prediction.");
+        const message = errorData.error || errorData.details || `Server error (${res.status}). Please check matches and try again.`;
+        throw new Error(message);
       }
 
       const data: SquadPredictionResponse = await res.json();

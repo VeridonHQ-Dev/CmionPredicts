@@ -126,8 +126,8 @@ export const ResultView: React.FC<ResultViewProps> = ({
             </div>
 
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-              Form: {player.formRating.toFixed(1)}/10 • Recent 5:{" "}
-              {player.stats.recentRatings.join(", ")} • Projected: ~{player.projectedPoints} pts
+              Form: {typeof player.formRating === "number" ? player.formRating.toFixed(1) : player.formRating}/10 • Recent 5:{" "}
+              {player.stats?.recentRatings?.length ? player.stats.recentRatings.join(", ") : "Consistent"} • Projected: ~{player.projectedPoints} pts
             </p>
           </div>
         </div>

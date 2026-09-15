@@ -389,16 +389,17 @@ export async function runFootballPrediction(rawInput: string): Promise<SquadPred
 
   // Try Gemini AI models with automatic fallback across models if high demand (503) occurs
   if (apiKey && apiKey !== "MY_GEMINI_API_KEY" && apiKey.trim().length > 10) {
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build'
+    try {
+      const ai = new GoogleGenAI({
+        apiKey: apiKey.trim(),
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build'
+          }
         }
-      }
-    });
+      });
 
-    const prompt = `You are CmionPredicts, an elite sports analytics and fantasy football AI engine.
+      const prompt = `You are CmionPredicts, an elite sports analytics and fantasy football AI engine.
 Task: Analyze these football teams and their upcoming matches: ${JSON.stringify(identifiedTeams)}.
 
 Instructions:
@@ -464,53 +465,118 @@ Instructions:
   ]
 }`;
 
-    // Candidate models in order of priority (lite model is fast and resilient against 503 high demand)
-    const candidateModels = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"];
+      // Candidate models in order of priority (lite model is fast and resilient against 503 high demand)
+      const candidateModels = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"];
 
-    for (const model of candidateModels) {
-      try {
-        const response = await ai.models.generateContent({
-          model,
-          contents: prompt,
-          config: {
-            systemInstruction: "You are the CmionPredicts prediction engine. Always return strictly valid JSON. Maintain statistical honesty. Ensure squad contains exactly 2 GK, 5 DEF, 5 MID, 3 FWD.",
-            responseMimeType: "application/json"
-          }
-        });
+      for (const model of candidateModels) {
+        try {
+          const response = await ai.models.generateContent({
+            model,
+            contents: prompt,
+            config: {
+              systemInstruction: "You are the CmionPredicts prediction engine. Always return strictly valid JSON. Maintain statistical honesty. Ensure squad contains exactly 2 GK, 5 DEF, 5 MID, 3 FWD.",
+              responseMimeType: "application/json"
+            }
+          });
 
-        if (response?.text) {
-          const parsed = JSON.parse(response.text.trim());
-          if (parsed.players && Array.isArray(parsed.players) && parsed.players.length === 15) {
-            aiResult = parsed;
-            useLiveAi = true;
-            break; // Succeeded!
+          if (response?.text) {
+            const parsed = JSON.parse(response.text.trim());
+            if (parsed.players && Array.isArray(parsed.players) && parsed.players.length === 15) {
+              aiResult = parsed;
+              useLiveAi = true;
+              break; // Succeeded!
+            }
           }
+        } catch {
+          // Continue to next candidate model if current candidate is rate-limited or busy
+          continue;
         }
-      } catch (err: any) {
-        // Log clean diagnostic info without throwing or alarming logs
-        console.log(`[CmionPredicts AI] Model ${model} unavailable, trying next candidate...`);
       }
+    } catch (aiInitErr) {
+      console.warn("[CmionPredicts] Note: AI initialization fallback triggered:", aiInitErr);
     }
   }
 
   // If live AI produced valid 15-man squad, format and validate it
   if (useLiveAi && aiResult) {
-    return formatAiResult(aiResult, identifiedTeams);
+    try {
+      const formatted = formatAiResult(aiResult, identifiedTeams, rawFixtures);
+      if (formatted) return formatted;
+    } catch (formatErr) {
+      console.warn("[CmionPredicts] Formatting AI result fell back to statistical engine:", formatErr);
+    }
   }
 
   // Otherwise, use our pre-calibrated intelligence engine
   return buildStatisticalPrediction(identifiedTeams, rawFixtures);
 }
 
-function formatAiResult(aiData: any, teams: string[]): SquadPredictionResponse {
-  const gks = aiData.players.filter((p: any) => p.position === 'GOALKEEPER');
-  const defs = aiData.players.filter((p: any) => p.position === 'DEFENDER');
-  const mids = aiData.players.filter((p: any) => p.position === 'MIDFIELDER');
-  const fwds = aiData.players.filter((p: any) => p.position === 'FORWARD');
+function normalizeAiPlayer(p: any, idx: number, defaultClub: string): PlayerPrediction {
+  const avgRating = typeof p.formRating === 'number' ? p.formRating : parseFloat(p.formRating) || 7.8;
+  const projectedPts = typeof p.projectedPoints === 'number' ? p.projectedPoints : parseFloat(p.projectedPoints) || 8.5;
+  const recentRatings = Array.isArray(p.recentRatings) && p.recentRatings.length > 0
+    ? p.recentRatings.map((r: any) => typeof r === 'number' ? r : parseFloat(r) || 7.5)
+    : [avgRating, Math.max(6, avgRating - 0.2), Math.min(10, avgRating + 0.3), Math.max(6, avgRating - 0.1), avgRating];
 
-  // If counts are slightly off from AI, re-balance to guarantee exactly 2, 5, 5, 3
+  const pos: Position = ['GOALKEEPER', 'DEFENDER', 'MIDFIELDER', 'FORWARD'].includes(p.position)
+    ? p.position
+    : 'MIDFIELDER';
+
+  const status: PlayerStatus = ['STARTING', 'EXPECTED_STARTER', 'ROTATION_RISK', 'UNAVAILABLE'].includes(p.status)
+    ? p.status
+    : 'STARTING';
+
+  return {
+    id: p.id || `ai_player_${idx}`,
+    name: p.name || `Player ${idx + 1}`,
+    club: p.club || defaultClub || "Selected Club",
+    countryOrLeague: p.countryOrLeague || "European Football",
+    position: pos,
+    status,
+    statusText: p.statusText || "Key starter in regular XI",
+    formRating: Math.round(avgRating * 10) / 10,
+    projectedPoints: Math.round(projectedPts * 10) / 10,
+    startingProbability: typeof p.startingProbability === 'number' ? p.startingProbability : 90,
+    fitnessStatus: p.fitnessStatus || "100% Match Fit",
+    upcomingMatch: {
+      opponent: p.upcomingOpponent || p.upcomingMatch?.opponent || "Upcoming Opponent",
+      isHome: typeof p.isHome === 'boolean' ? p.isHome : (p.upcomingMatch?.isHome ?? true),
+      competition: p.competition || p.upcomingMatch?.competition || "Matchday Fixture",
+      kickoffDate: p.kickoffDate || p.upcomingMatch?.kickoffDate || new Date(Date.now() + 86400000).toISOString().split('T')[0],
+      kickoffTime: p.kickoffTime || p.upcomingMatch?.kickoffTime || "20:00",
+      difficulty: typeof p.difficulty === 'number' ? p.difficulty : (p.upcomingMatch?.difficulty || 3),
+    },
+    stats: {
+      matchesAnalyzed: recentRatings.length,
+      avgRating: Math.round(avgRating * 10) / 10,
+      minutesPlayedAvg: typeof p.minutesPlayedAvg === 'number' ? p.minutesPlayedAvg : 88,
+      goals: typeof p.goals === 'number' ? p.goals : (parseInt(p.goals) || 0),
+      assists: typeof p.assists === 'number' ? p.assists : (parseInt(p.assists) || 0),
+      chancesCreated: typeof p.chancesCreated === 'number' ? p.chancesCreated : (parseInt(p.chancesCreated) || 0),
+      cleanSheets: typeof p.cleanSheets === 'number' ? p.cleanSheets : (parseInt(p.cleanSheets) || 0),
+      saves: typeof p.saves === 'number' ? p.saves : (parseInt(p.saves) || 0),
+      xG: typeof p.xG === 'number' ? p.xG : 0.4,
+      xA: typeof p.xA === 'number' ? p.xA : 0.3,
+      recentRatings,
+    },
+    roleOnPitch: p.roleOnPitch || p.role || (pos === 'GOALKEEPER' ? 'GK' : pos === 'DEFENDER' ? 'CB' : pos === 'FORWARD' ? 'ST' : 'CM'),
+    analysisReason: p.analysisReason || p.reason || "High current form and expected starting place."
+  };
+}
+
+function formatAiResult(aiData: any, teams: string[], rawFixtures: Array<{ home: string; away?: string }>): SquadPredictionResponse {
+  const normalizedPlayers: PlayerPrediction[] = (aiData.players || []).map((p: any, idx: number) =>
+    normalizeAiPlayer(p, idx, teams[0] || "Selected Club")
+  );
+
+  const gks = normalizedPlayers.filter(p => p.position === 'GOALKEEPER');
+  const defs = normalizedPlayers.filter(p => p.position === 'DEFENDER');
+  const mids = normalizedPlayers.filter(p => p.position === 'MIDFIELDER');
+  const fwds = normalizedPlayers.filter(p => p.position === 'FORWARD');
+
+  // If counts are slightly off from AI, fall back to robust statistical engine
   if (gks.length !== 2 || defs.length !== 5 || mids.length !== 5 || fwds.length !== 3) {
-    return buildStatisticalPrediction(teams, []);
+    return buildStatisticalPrediction(teams, rawFixtures);
   }
 
   const formation = (aiData.bestFormation as SupportedFormation) || "4-3-3";
@@ -532,16 +598,16 @@ function formatAiResult(aiData: any, teams: string[]): SquadPredictionResponse {
     ...fwds.slice(fwdCount)
   ];
 
-  // Identify Captain & Vice-Captain
-  let captain = startingXI.find((p: any) => p.id === aiData.captainId) || startingXI[startingXI.length - 1];
-  let viceCaptain = startingXI.find((p: any) => p.id === aiData.viceCaptainId && p.id !== captain.id) || startingXI[startingXI.length - 2];
+  // Identify Captain & Vice-Captain safely
+  let captain = startingXI.find(p => p.id === aiData.captainId) || startingXI[startingXI.length - 1] || startingXI[0];
+  let viceCaptain = startingXI.find(p => p.id === aiData.viceCaptainId && p.id !== captain?.id) || startingXI[startingXI.length - 2] || startingXI[1] || captain;
 
-  captain.isCaptain = true;
-  viceCaptain.isViceCaptain = true;
+  if (captain) captain.isCaptain = true;
+  if (viceCaptain && viceCaptain !== captain) viceCaptain.isViceCaptain = true;
 
   // Calculate projected points
   let calculatedScore = startingXI.reduce((acc, p) => acc + (p.projectedPoints || 8), 0);
-  calculatedScore += (captain.projectedPoints || 8); // Double points for Captain
+  if (captain) calculatedScore += (captain.projectedPoints || 8); // Double points for Captain
   const roundedPoints = Math.min(150, Math.round(aiData.projectedPoints || calculatedScore));
 
   const formationsTested: FormationAnalysis[] = (aiData.formationEvaluations || [

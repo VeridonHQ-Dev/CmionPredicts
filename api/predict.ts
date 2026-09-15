@@ -1,5 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { runFootballPrediction } from "../src/server/footballEngine.ts";
+import { runFootballPrediction } from "../src/server/footballEngine";
+
+// Configure maximum execution duration on Vercel
+export const maxDuration = 60;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
@@ -12,7 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method Not Allowed. Use POST." });
+    return res.status(405).json({ error: "Method Not Allowed. Please use POST." });
   }
 
   try {
@@ -21,7 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       try {
         body = JSON.parse(body);
       } catch {
-        // use string as-is
+        // use raw string
       }
     }
 
@@ -35,8 +38,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err: any) {
     console.error("Vercel API prediction error:", err);
     return res.status(500).json({
-      error: "Failed to generate prediction. Please try again.",
-      details: err?.message || String(err),
+      error: err?.message || "Failed to generate prediction. Please try again.",
+      details: err?.stack || String(err),
     });
   }
 }
