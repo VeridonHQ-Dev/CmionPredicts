@@ -67,7 +67,18 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## 📦 Production Build & Deployment
 
-To compile both the Vite frontend client and the backend server into a production-ready package:
+### Deploying to Vercel (Recommended)
+This repository is configured out-of-the-box for **Vercel**:
+1. Push your repository to GitHub.
+2. In the [Vercel Dashboard](https://vercel.com/new), click **Add New Project** and import your GitHub repository.
+3. Vercel automatically detects Vite and the `vercel.json` configuration.
+4. Under **Environment Variables**, add:
+   - **Key**: `GEMINI_API_KEY`
+   - **Value**: Your Google AI Studio API key.
+5. Click **Deploy**. Vercel will host both the frontend and the `/api/predict` serverless functions.
+
+### Deploying with Node.js / Docker / Cloud Run
+To compile both the Vite frontend client and the backend server into a standalone container or Node runtime:
 
 ```bash
 npm run build
