@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { runFootballPrediction } from "./src/server/footballEngine";
+import { runFootballPrediction } from "./api/predict";
 
 async function startServer() {
   const app = express();

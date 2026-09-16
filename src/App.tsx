@@ -77,8 +77,21 @@ export default function App() {
       });
 
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        const message = errorData.error || errorData.details || `Server error (${res.status}). Please check matches and try again.`;
+        let message = `Server error (${res.status}). Please check matches and try again.`;
+        try {
+          const rawText = await res.text();
+          try {
+            const errorData = JSON.parse(rawText);
+            if (errorData.error) message = errorData.error;
+            else if (errorData.details) message = `${errorData.error || "Error"}: ${errorData.details}`;
+          } catch {
+            if (rawText && rawText.length < 300 && !rawText.includes("<!DOCTYPE")) {
+              message = `Server (${res.status}): ${rawText}`;
+            }
+          }
+        } catch {
+          // fallback
+        }
         throw new Error(message);
       }
 
