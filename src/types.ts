@@ -114,6 +114,7 @@ export interface UpcomingMatchesResponse {
   totalFound: number;
   filteredCount: number;
   matches: UpcomingMatch[];
+  suggestedMatches?: UpcomingMatch[];
   isAiGenerated?: boolean;
   source?: string;
 }

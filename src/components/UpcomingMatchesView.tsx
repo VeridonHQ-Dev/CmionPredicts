@@ -66,11 +66,12 @@ export const UpcomingMatchesView: React.FC<UpcomingMatchesViewProps> = ({
   const [selectedRegion, setSelectedRegion] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [includeNextMatchdays, setIncludeNextMatchdays] = useState(false);
-  const [selectedTimeZone, setSelectedTimeZone] = useState(detectedTz);
+  const [selectedTimeZone, setSelectedTimeZone] = useState("Europe/London");
 
   // Data States
   const [loading, setLoading] = useState(false);
   const [matches, setMatches] = useState<UpcomingMatch[]>([]);
+  const [suggestedMatches, setSuggestedMatches] = useState<UpcomingMatch[]>([]);
   const [selectedMatchIds, setSelectedMatchIds] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
@@ -96,6 +97,7 @@ export const UpcomingMatchesView: React.FC<UpcomingMatchesViewProps> = ({
       const data: UpcomingMatchesResponse = await res.json();
       if (data.matches) {
         setMatches(data.matches);
+        setSuggestedMatches(data.suggestedMatches || []);
         setTotalFoundInWorld(data.totalFound || data.matches.length);
         if (data.source) setDataSourceLabel(data.source);
         // Default select all matches in the time window
@@ -290,17 +292,18 @@ export const UpcomingMatchesView: React.FC<UpcomingMatchesViewProps> = ({
             onChange={(e) => setSelectedTimeZone(e.target.value)}
             className="bg-white dark:bg-neutral-900 text-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-neutral-700 rounded-lg px-2 py-1 text-xs font-medium focus:outline-none cursor-pointer"
           >
-            <option value="Europe/London">UK / London (BST/GMT)</option>
+            <option value="Europe/London">UK / London (BST) — Official Match Times</option>
+            {detectedTz !== "Europe/London" && (
+              <option value={detectedTz}>Your Local Time ({detectedTz})</option>
+            )}
             <option value="Africa/Lagos">West Africa / Lagos (WAT)</option>
             <option value="Europe/Paris">Central Europe (CET)</option>
             <option value="America/New_York">US Eastern (EDT)</option>
+            <option value="America/Los_Angeles">US Pacific (PDT)</option>
             <option value="America/Sao_Paulo">Brazil / São Paulo (BRT)</option>
             <option value="Asia/Riyadh">Saudi Arabia (AST)</option>
             <option value="Asia/Tokyo">Japan (JST)</option>
             <option value="UTC">UTC (Universal)</option>
-            {detectedTz !== "Europe/London" && (
-              <option value={detectedTz}>Detected ({detectedTz})</option>
-            )}
           </select>
         </div>
       </div>
@@ -531,30 +534,88 @@ export const UpcomingMatchesView: React.FC<UpcomingMatchesViewProps> = ({
             </p>
           </div>
         ) : displayedMatches.length === 0 ? (
-          <div className="py-16 text-center bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl px-4">
+          <div className="py-12 text-center bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl px-4 sm:px-6 shadow-xs">
             <Clock className="w-10 h-10 mx-auto text-neutral-300 dark:text-neutral-600 mb-3" />
             <h3 className="text-base font-bold text-neutral-800 dark:text-neutral-200">
               No matches found in this time window
             </h3>
-            <p className="text-xs text-neutral-400 mt-1 max-w-md mx-auto">
-              No live fixtures between <span className="font-semibold text-neutral-700 dark:text-neutral-300">{startTime}</span> and <span className="font-semibold text-neutral-700 dark:text-neutral-300">{endTime}</span> on {selectedDate} ({selectedRegion}).
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 max-w-md mx-auto">
+              No live fixtures between <span className="font-semibold text-neutral-700 dark:text-neutral-300">{startTime}</span> and <span className="font-semibold text-neutral-700 dark:text-neutral-300">{endTime}</span> on {selectedDate} ({selectedRegion}) in {selectedTimeZone}.
             </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <div className="mt-5 flex flex-wrap justify-center gap-2.5">
               <button
                 type="button"
-                onClick={() => handleApplyPreset(TIME_PRESETS[0])}
-                className="px-3 py-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 rounded-lg border border-emerald-200 dark:border-emerald-800 cursor-pointer"
+                onClick={() => {
+                  setSelectedTimeZone("Europe/London");
+                  handleApplyPreset(TIME_PRESETS[0]);
+                }}
+                className="px-3.5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm transition-all cursor-pointer active:scale-98"
               >
-                Reset to Prime Time (7:45pm - 11:45pm)
+                Switch to UK Prime Time (7:45pm - 11:45pm BST)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApplyPreset(TIME_PRESETS[4])}
+                className="px-3.5 py-2 text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 rounded-xl transition-all cursor-pointer"
+              >
+                Show All Matches Today ({totalFoundInWorld})
               </button>
               <button
                 type="button"
                 onClick={() => setIncludeNextMatchdays(true)}
-                className="px-3 py-1.5 text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 rounded-lg cursor-pointer"
+                className="px-3.5 py-2 text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 rounded-xl transition-all cursor-pointer"
               >
-                View Upcoming Matchdays
+                Include Upcoming Matchdays
               </button>
             </div>
+
+            {/* Suggested Matches available on this date */}
+            {suggestedMatches.length > 0 && (
+              <div className="mt-8 text-left border-t border-neutral-100 dark:border-neutral-800 pt-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <h4 className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
+                      Matches Scheduled on {selectedDate} ({suggestedMatches.length} available)
+                    </h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMatches(suggestedMatches);
+                      setSelectedMatchIds(new Set(suggestedMatches.map((m) => m.id)));
+                    }}
+                    className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer self-start sm:self-auto"
+                  >
+                    View All {suggestedMatches.length} In Main List →
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                  {suggestedMatches.slice(0, 10).map((match) => (
+                    <div
+                      key={match.id}
+                      className="flex items-center justify-between p-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-800/40 hover:bg-neutral-100/70 dark:hover:bg-neutral-800/70 transition-colors"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-semibold text-neutral-900 dark:text-white">
+                          {match.versusLabel}
+                        </span>
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300">
+                          {match.league}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handlePredictSingle(match)}
+                        className="px-2.5 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/60 rounded-md hover:bg-emerald-200 dark:hover:bg-emerald-900/60 cursor-pointer transition-colors shrink-0"
+                      >
+                        Predict
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           displayedMatches.map((match) => {
