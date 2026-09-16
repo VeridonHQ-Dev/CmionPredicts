@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { Sparkles, ArrowRight, ShieldCheck } from "lucide-react";
+import { Sparkles, ArrowRight, ShieldCheck, Calendar, Globe2 } from "lucide-react";
 
 interface LandingViewProps {
   onPredict: (rawText: string) => void;
+  onOpenUpcomingMatches?: () => void;
   isMockDataMode?: boolean;
 }
 
@@ -31,7 +32,11 @@ Bayern Munich vs Bodo/Glimt`
   }
 ];
 
-export const LandingView: React.FC<LandingViewProps> = ({ onPredict, isMockDataMode }) => {
+export const LandingView: React.FC<LandingViewProps> = ({
+  onPredict,
+  onOpenUpcomingMatches,
+  isMockDataMode
+}) => {
   const [inputText, setInputText] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -103,16 +108,31 @@ export const LandingView: React.FC<LandingViewProps> = ({ onPredict, isMockDataM
         </div>
 
         {/* Large PREDICT Button */}
-        <div className="mt-5 flex justify-center">
+        <div className="mt-5 flex flex-col sm:flex-row items-center justify-center gap-3">
           <button
             type="submit"
             id="predict-btn"
             disabled={!inputText.trim()}
-            className="w-full sm:w-auto min-w-[220px] px-8 py-3.5 bg-neutral-900 hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500 disabled:bg-neutral-200 dark:disabled:bg-neutral-800 disabled:text-neutral-400 dark:disabled:text-neutral-600 disabled:cursor-not-allowed text-white font-bold text-base sm:text-lg rounded-xl shadow-md hover:shadow-lg transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+            className="w-full sm:w-auto min-w-[200px] px-8 py-3.5 bg-neutral-900 hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500 disabled:bg-neutral-200 dark:disabled:bg-neutral-800 disabled:text-neutral-400 dark:disabled:text-neutral-600 disabled:cursor-not-allowed text-white font-bold text-base sm:text-lg rounded-xl shadow-md hover:shadow-lg transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
           >
             <span>PREDICT</span>
             <ArrowRight className="w-5 h-5" />
           </button>
+
+          {onOpenUpcomingMatches && (
+            <button
+              type="button"
+              id="open-upcoming-btn"
+              onClick={onOpenUpcomingMatches}
+              className="w-full sm:w-auto px-6 py-3.5 bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-800 dark:text-neutral-100 font-bold text-sm sm:text-base rounded-xl border border-neutral-300 dark:border-neutral-700 hover:border-emerald-500 dark:hover:border-emerald-500 shadow-sm transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+            >
+              <Calendar className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span>Upcoming Matches</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-semibold">
+                Time Filter
+              </span>
+            </button>
+          )}
         </div>
       </form>
 

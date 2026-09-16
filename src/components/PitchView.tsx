@@ -98,8 +98,10 @@ interface PlayerPitchPinProps {
 }
 
 const PlayerPitchPin: React.FC<PlayerPitchPinProps> = ({ player, isGK }) => {
+  const bd = player.pointBreakdown;
+
   return (
-    <div className="flex flex-col items-center group cursor-default transition-transform duration-150 hover:scale-105">
+    <div className="relative flex flex-col items-center group cursor-pointer transition-transform duration-150 hover:scale-105">
       {/* Jersey / Kit badge */}
       <div className="relative">
         <div
@@ -115,7 +117,7 @@ const PlayerPitchPin: React.FC<PlayerPitchPinProps> = ({ player, isGK }) => {
         {/* Captain / Vice Captain Badge */}
         {player.isCaptain && (
           <span
-            title="Captain"
+            title="Captain (2x Multiplier)"
             className="absolute -top-1.5 -right-2 bg-amber-500 text-neutral-950 font-extrabold text-[10px] px-1.5 py-0.5 rounded-full border border-amber-200 shadow"
           >
             (C)
@@ -146,13 +148,71 @@ const PlayerPitchPin: React.FC<PlayerPitchPinProps> = ({ player, isGK }) => {
       </div>
 
       {/* Name and club label */}
-      <div className="mt-1.5 text-center max-w-[80px] sm:max-w-[100px]">
-        <p className="text-[11px] sm:text-xs font-bold leading-tight truncate px-1 py-0.5 bg-black/60 rounded backdrop-blur-xs text-white">
+      <div className="mt-1 text-center max-w-[84px] sm:max-w-[104px]">
+        <p className="text-[11px] sm:text-xs font-bold leading-tight truncate px-1 py-0.5 bg-black/70 rounded backdrop-blur-xs text-white">
           {player.name.split(" ").slice(-1)[0]}
         </p>
-        <p className="text-[9px] text-emerald-200 truncate mt-0.5">
-          {player.club}
-        </p>
+        <div className="mt-0.5 flex items-center justify-center gap-1">
+          <span className="text-[9px] font-black tracking-tight px-1.5 py-0.2 rounded-full bg-emerald-950/80 border border-emerald-400/40 text-emerald-300 shadow-xs">
+            {player.projectedPoints} pts
+          </span>
+          {player.isCaptain && (
+            <span className="text-[8px] font-bold text-amber-300">
+              2x
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Interactive Hover Breakdown Popover */}
+      <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col w-48 bg-neutral-900/95 border border-neutral-700 text-white rounded-xl p-2.5 shadow-2xl z-50 pointer-events-none text-left backdrop-blur-md">
+        <div className="flex items-center justify-between pb-1.5 border-b border-neutral-700/70">
+          <span className="font-bold text-xs truncate text-emerald-300">{player.name}</span>
+          <span className="font-mono text-xs font-black text-amber-400">{player.projectedPoints} pts</span>
+        </div>
+        <div className="mt-1.5 space-y-1 text-[10px] text-neutral-300">
+          <div className="flex justify-between">
+            <span>Appearance (1 pt):</span>
+            <span className="font-mono text-emerald-400">+{bd?.appearance ?? 1}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>60+ Mins on Pitch (2 pts):</span>
+            <span className="font-mono text-emerald-400">+{bd?.minutes60Plus ?? 2}</span>
+          </div>
+          {Boolean(bd?.goals) && (
+            <div className="flex justify-between">
+              <span>Goals ({player.position === 'FORWARD' ? '4' : player.position === 'MIDFIELDER' ? '5' : '6'} pts/ea):</span>
+              <span className="font-mono text-emerald-400">+{bd?.goals}</span>
+            </div>
+          )}
+          {Boolean(bd?.cleanSheet) && (
+            <div className="flex justify-between">
+              <span>Clean Sheet (6 pts):</span>
+              <span className="font-mono text-emerald-400">+{bd?.cleanSheet}</span>
+            </div>
+          )}
+          {Boolean(bd?.assists) && (
+            <div className="flex justify-between">
+              <span>Assists (3 pts/ea):</span>
+              <span className="font-mono text-emerald-400">+{bd?.assists}</span>
+            </div>
+          )}
+          {Boolean(bd?.hatTrickBonus) && (
+            <div className="flex justify-between text-amber-300 font-bold">
+              <span>Hat-trick Multiplier:</span>
+              <span className="font-mono">x1.5</span>
+            </div>
+          )}
+          {player.isCaptain && (
+            <div className="flex justify-between text-amber-300 font-bold pt-1 border-t border-neutral-800">
+              <span>Captain Multiplier:</span>
+              <span className="font-mono">x2.0</span>
+            </div>
+          )}
+        </div>
+        <div className="mt-1.5 pt-1 border-t border-neutral-800 text-[9px] text-neutral-400 italic">
+          {player.analysisReason}
+        </div>
       </div>
     </div>
   );

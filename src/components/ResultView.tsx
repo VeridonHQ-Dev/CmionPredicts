@@ -29,10 +29,12 @@ export const ResultView: React.FC<ResultViewProps> = ({
 }) => {
   const [showFormationBreakdown, setShowFormationBreakdown] = useState(false);
   const [showFixtures, setShowFixtures] = useState(false);
+  const [showScoringRules, setShowScoringRules] = useState(true);
 
   const {
     predictedFormation,
     projectedPoints,
+    scoringGuardrails,
     captain,
     viceCaptain,
     final15,
@@ -51,21 +53,21 @@ export const ResultView: React.FC<ResultViewProps> = ({
       case "STARTING":
         return (
           <span
-            title={statusText || "Starting"}
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full"
+            title={statusText || "Confirmed Starting XI"}
+            className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full"
           >
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span>STARTING</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>STARTING 11</span>
           </span>
         );
       case "EXPECTED_STARTER":
         return (
           <span
-            title={statusText || "Expected Starter"}
+            title={statusText || "Expected Starter / Sub"}
             className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full"
           >
             <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-            <span>EXPECTED STARTER</span>
+            <span>BENCH SUB</span>
           </span>
         );
       case "ROTATION_RISK":
@@ -94,6 +96,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
   const renderPlayerRow = (player: PlayerPrediction, index: number, keyPrefix: string = "player") => {
     const isCap = player.isCaptain || player.id === captain.id;
     const isVc = player.isViceCaptain || player.id === viceCaptain.id;
+    const bd = player.pointBreakdown;
 
     return (
       <div
@@ -114,8 +117,8 @@ export const ResultView: React.FC<ResultViewProps> = ({
               </span>
 
               {isCap && (
-                <span className="bg-amber-400 text-neutral-950 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-amber-300 shadow-2xs">
-                  (C)
+                <span className="bg-amber-400 text-neutral-950 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-300 shadow-2xs">
+                  (C) 2x Multiplier
                 </span>
               )}
               {isVc && (
@@ -125,14 +128,59 @@ export const ResultView: React.FC<ResultViewProps> = ({
               )}
             </div>
 
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-              Form: {typeof player.formRating === "number" ? player.formRating.toFixed(1) : player.formRating}/10 • Recent 5:{" "}
-              {player.stats?.recentRatings?.length ? player.stats.recentRatings.join(", ") : "Consistent"} • Projected: ~{player.projectedPoints} pts
+            {/* Fantasy points calculation & breakdown line */}
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-md">
+                {player.projectedPoints} pts
+              </span>
+
+              {bd && (
+                <span className="text-[11px] text-neutral-600 dark:text-neutral-300 flex items-center gap-1 flex-wrap">
+                  <span className="text-neutral-400 dark:text-neutral-500">•</span>
+                  <span>App: +{bd.appearance}</span>
+                  <span>•</span>
+                  <span>60+m: +{bd.minutes60Plus}</span>
+                  {bd.goals > 0 && (
+                    <>
+                      <span>•</span>
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400">Goals: +{bd.goals}</span>
+                    </>
+                  )}
+                  {bd.cleanSheet > 0 && (
+                    <>
+                      <span>•</span>
+                      <span className="font-semibold text-blue-600 dark:text-blue-400">Clean Sheet: +{bd.cleanSheet}</span>
+                    </>
+                  )}
+                  {bd.assists > 0 && (
+                    <>
+                      <span>•</span>
+                      <span className="font-semibold text-purple-600 dark:text-purple-400">Assists: +{bd.assists}</span>
+                    </>
+                  )}
+                  {bd.hatTrickBonus > 0 && (
+                    <>
+                      <span>•</span>
+                      <span className="font-bold text-amber-500">Hat-trick: x1.5</span>
+                    </>
+                  )}
+                  {isCap && (
+                    <>
+                      <span>•</span>
+                      <span className="font-bold text-amber-500">Captain: x2.0</span>
+                    </>
+                  )}
+                </span>
+              )}
+            </div>
+
+            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-1">
+              Form: {typeof player.formRating === "number" ? player.formRating.toFixed(1) : player.formRating}/10 • {player.startingProbability}% Start Probability • {player.analysisReason}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:self-center pl-8 sm:pl-0">
+        <div className="flex items-center gap-2 sm:self-center pl-8 sm:pl-0 shrink-0">
           {renderStatusBadge(player.status, player.statusText)}
         </div>
       </div>
@@ -269,6 +317,108 @@ export const ResultView: React.FC<ResultViewProps> = ({
             </div>
           )}
         </div>
+      </div>
+
+      {/* FANTASY SCORING SYSTEM & SELECTION MINDSET CARD */}
+      <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-6 shadow-sm mb-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <h2 className="text-sm sm:text-base font-extrabold uppercase tracking-wider text-neutral-900 dark:text-white">
+              Official Fantasy Scoring Matrix & Selection Guardrails
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowScoringRules(!showScoringRules)}
+            className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer flex items-center gap-1"
+          >
+            <span>{showScoringRules ? "Collapse" : "View Matrix"}</span>
+            {showScoringRules ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+
+        {showScoringRules && (
+          <div className="mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-800 space-y-4 text-xs">
+            {/* 4 Guardrails Checklist */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700/80">
+                <div className="flex items-center gap-1.5 font-bold text-neutral-900 dark:text-white mb-1">
+                  <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 flex items-center justify-center text-[10px] font-black">1</span>
+                  <span>Starting 11 Requirement</span>
+                </div>
+                <p className="text-neutral-600 dark:text-neutral-300 text-[11px] leading-relaxed">
+                  Every player selected in the team setup is verified to be a confirmed starter playing between the selected match times with 60+ minutes guaranteed.
+                </p>
+              </div>
+
+              <div className="p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700/80">
+                <div className="flex items-center gap-1.5 font-bold text-neutral-900 dark:text-white mb-1">
+                  <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 flex items-center justify-center text-[10px] font-black">2</span>
+                  <span>~150 Pts Target Mindset</span>
+                </div>
+                <p className="text-neutral-600 dark:text-neutral-300 text-[11px] leading-relaxed">
+                  Engine strategically accumulates ~150 fantasy points across the Starting XI: leveraging clean-sheet defenders (6+6=12 pts), goalscoring mids (5 pts), and captaincy double (x2.0).
+                </p>
+              </div>
+            </div>
+
+            {/* Official Scoring Matrix Table */}
+            <div className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-700">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 font-bold text-[11px] uppercase tracking-wider">
+                    <th className="py-2.5 px-3 border-b border-neutral-200 dark:border-neutral-700">By Position</th>
+                    <th className="py-2.5 px-3 border-b border-neutral-200 dark:border-neutral-700 text-center">GK</th>
+                    <th className="py-2.5 px-3 border-b border-neutral-200 dark:border-neutral-700 text-center">DEF</th>
+                    <th className="py-2.5 px-3 border-b border-neutral-200 dark:border-neutral-700 text-center">MID</th>
+                    <th className="py-2.5 px-3 border-b border-neutral-200 dark:border-neutral-700 text-center">FWD</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-200 dark:divide-neutral-700 text-[11px]">
+                  <tr className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
+                    <td className="py-2 px-3 font-semibold text-neutral-900 dark:text-white">Goal Scored</td>
+                    <td className="py-2 px-3 text-center font-bold text-emerald-600 dark:text-emerald-400">6 pts</td>
+                    <td className="py-2 px-3 text-center font-bold text-emerald-600 dark:text-emerald-400">6 pts</td>
+                    <td className="py-2 px-3 text-center font-bold text-emerald-600 dark:text-emerald-400">5 pts</td>
+                    <td className="py-2 px-3 text-center font-bold text-emerald-600 dark:text-emerald-400">4 pts</td>
+                  </tr>
+                  <tr className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
+                    <td className="py-2 px-3 font-semibold text-neutral-900 dark:text-white">Clean Sheet</td>
+                    <td className="py-2 px-3 text-center font-bold text-blue-600 dark:text-blue-400">6 pts</td>
+                    <td className="py-2 px-3 text-center font-bold text-blue-600 dark:text-blue-400">6 pts</td>
+                    <td className="py-2 px-3 text-center text-neutral-400">—</td>
+                    <td className="py-2 px-3 text-center text-neutral-400">—</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Universal Multipliers and Bonuses */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1 text-center">
+              <div className="p-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700">
+                <span className="text-[10px] uppercase font-semibold text-neutral-400 block">Appearance</span>
+                <span className="font-bold text-neutral-900 dark:text-white text-xs">1 pt</span>
+              </div>
+              <div className="p-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700">
+                <span className="text-[10px] uppercase font-semibold text-neutral-400 block">60+ Mins Pitch</span>
+                <span className="font-bold text-neutral-900 dark:text-white text-xs">2 pts</span>
+              </div>
+              <div className="p-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700">
+                <span className="text-[10px] uppercase font-semibold text-neutral-400 block">Assist</span>
+                <span className="font-bold text-neutral-900 dark:text-white text-xs">3 pts</span>
+              </div>
+              <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
+                <span className="text-[10px] uppercase font-bold text-amber-700 dark:text-amber-400 block">Hat-trick</span>
+                <span className="font-extrabold text-amber-800 dark:text-amber-300 text-xs">x1.5 Multiplier</span>
+              </div>
+              <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 col-span-2 sm:col-span-1">
+                <span className="text-[10px] uppercase font-bold text-amber-700 dark:text-amber-400 block">Captain</span>
+                <span className="font-extrabold text-amber-800 dark:text-amber-300 text-xs">x2.0 Multiplier</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* STARTING XI SECTION */}

@@ -2,12 +2,14 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { runFootballPrediction } from "./api/predict";
+import { fetchUpcomingMatches } from "./api/fixtures";
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
   app.use(express.json({ limit: "2mb" }));
+  app.use(express.static(path.join(process.cwd(), "public")));
 
   // API and static asset routes FIRST
   app.get("/favicon.ico", (req, res) => {
@@ -42,6 +44,34 @@ async function startServer() {
         error: "Failed to generate prediction. Please try again.",
         details: err?.message || String(err)
       });
+    }
+  });
+
+  app.get("/api/fixtures", async (req, res) => {
+    try {
+      const date = typeof req.query.date === "string" ? req.query.date : undefined;
+      const startTime = typeof req.query.startTime === "string" ? req.query.startTime : undefined;
+      const endTime = typeof req.query.endTime === "string" ? req.query.endTime : undefined;
+      const region = typeof req.query.region === "string" ? req.query.region : undefined;
+      const includeNextMatchdays = req.query.includeNextMatchdays === "true" || req.query.includeNextMatchdays === "1";
+      const timeZone = typeof req.query.timeZone === "string" ? req.query.timeZone : undefined;
+
+      const result = await fetchUpcomingMatches({ date, startTime, endTime, region, includeNextMatchdays, timeZone });
+      return res.json(result);
+    } catch (err: any) {
+      console.error("Fixtures GET error:", err);
+      return res.status(500).json({ error: "Failed to fetch fixtures", details: err?.message });
+    }
+  });
+
+  app.post("/api/fixtures", async (req, res) => {
+    try {
+      const { date, startTime, endTime, region, includeNextMatchdays, timeZone } = req.body || {};
+      const result = await fetchUpcomingMatches({ date, startTime, endTime, region, includeNextMatchdays: Boolean(includeNextMatchdays), timeZone });
+      return res.json(result);
+    } catch (err: any) {
+      console.error("Fixtures POST error:", err);
+      return res.status(500).json({ error: "Failed to fetch fixtures", details: err?.message });
     }
   });
 
