@@ -1,6 +1,6 @@
 import React from "react";
 import { PlayerPrediction, SupportedFormation } from "../types";
-import { Shield, Sparkles } from "lucide-react";
+import { sanitizePlayerName, getPitchDisplayName } from "../utils/playerSanitizer";
 
 interface PitchViewProps {
   formation: SupportedFormation;
@@ -16,10 +16,10 @@ export const PitchView: React.FC<PitchViewProps> = ({ formation, startingXI }) =
 
   return (
     <div id="football-pitch-container" className="w-full max-w-2xl mx-auto my-6">
-      {/* Pitch frame */}
-      <div className="relative w-full rounded-2xl overflow-hidden bg-gradient-to-b from-emerald-800 via-emerald-700 to-emerald-800 border-4 border-emerald-900/40 shadow-2xl p-4 sm:p-6 text-white select-none">
-        {/* Pitch markings */}
-        <div className="absolute inset-0 pointer-events-none opacity-25">
+      {/* Pitch frame - without overflow-hidden on outer container so hover popups are never sliced off */}
+      <div className="relative w-full rounded-2xl bg-gradient-to-b from-emerald-800 via-emerald-700 to-emerald-800 border-4 border-emerald-900/40 shadow-2xl p-4 sm:p-6 text-white select-none">
+        {/* Pitch markings container with overflow-hidden for markings */}
+        <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none opacity-25">
           {/* Pitch boundary */}
           <div className="absolute inset-3 border-2 border-white/60 rounded-lg"></div>
           {/* Halfway line */}
@@ -52,31 +52,61 @@ export const PitchView: React.FC<PitchViewProps> = ({ formation, startingXI }) =
 
         {/* Tactical rows on pitch */}
         <div className="relative z-10 flex flex-col justify-between space-y-6 sm:space-y-8 min-h-[460px] py-2">
-          {/* FORWARDS ROW (Top) */}
-          <div className="flex justify-around items-center px-4">
-            {fwds.map((player) => (
-              <PlayerPitchPin key={player.id} player={player} />
-            ))}
+          {/* FORWARDS ROW (Top - Striker row opens pop-up downwards to eliminate overflow clipping) */}
+          <div className="flex justify-around items-center px-4 relative z-30">
+            {fwds.map((player, idx) => {
+              const align = fwds.length === 1 ? "center" : idx === 0 ? "left" : idx === fwds.length - 1 ? "right" : "center";
+              return (
+                <PlayerPitchPin
+                  key={player.id}
+                  player={player}
+                  isForwardRow={true}
+                  horizontalAlign={align}
+                />
+              );
+            })}
           </div>
 
           {/* MIDFIELDERS ROW (Middle) */}
-          <div className="flex justify-around items-center px-2">
-            {mids.map((player) => (
-              <PlayerPitchPin key={player.id} player={player} />
-            ))}
+          <div className="flex justify-around items-center px-2 relative z-20">
+            {mids.map((player, idx) => {
+              const align = mids.length === 1 ? "center" : idx === 0 ? "left" : idx === mids.length - 1 ? "right" : "center";
+              return (
+                <PlayerPitchPin
+                  key={player.id}
+                  player={player}
+                  isForwardRow={false}
+                  horizontalAlign={align}
+                />
+              );
+            })}
           </div>
 
           {/* DEFENDERS ROW */}
-          <div className="flex justify-around items-center px-2">
-            {defs.map((player) => (
-              <PlayerPitchPin key={player.id} player={player} />
-            ))}
+          <div className="flex justify-around items-center px-2 relative z-10">
+            {defs.map((player, idx) => {
+              const align = defs.length === 1 ? "center" : idx === 0 ? "left" : idx === defs.length - 1 ? "right" : "center";
+              return (
+                <PlayerPitchPin
+                  key={player.id}
+                  player={player}
+                  isForwardRow={false}
+                  horizontalAlign={align}
+                />
+              );
+            })}
           </div>
 
           {/* GOALKEEPER ROW (Bottom) */}
-          <div className="flex justify-center items-center">
+          <div className="flex justify-center items-center relative z-10">
             {gk.map((player) => (
-              <PlayerPitchPin key={player.id} player={player} isGK />
+              <PlayerPitchPin
+                key={player.id}
+                player={player}
+                isGK
+                isForwardRow={false}
+                horizontalAlign="center"
+              />
             ))}
           </div>
         </div>
@@ -95,10 +125,34 @@ export const PitchView: React.FC<PitchViewProps> = ({ formation, startingXI }) =
 interface PlayerPitchPinProps {
   player: PlayerPrediction;
   isGK?: boolean;
+  isForwardRow?: boolean;
+  horizontalAlign?: "left" | "center" | "right";
 }
 
-const PlayerPitchPin: React.FC<PlayerPitchPinProps> = ({ player, isGK }) => {
+const PlayerPitchPin: React.FC<PlayerPitchPinProps> = ({
+  player,
+  isGK,
+  isForwardRow = false,
+  horizontalAlign = "center"
+}) => {
   const bd = player.pointBreakdown;
+
+  // Sanitize player name to guarantee real player name without position labels ("Striker", "Back", "Playmaker") or club names
+  const cleanFullName = sanitizePlayerName(player.name, player.club, player.position);
+  const displayName = getPitchDisplayName(player.name, player.club, player.position);
+
+  // Position pop-up:
+  // Forward/Striker row is at the top of the pitch: open DOWNWARDS (top-full mt-2.5) so details are never cut off.
+  // Other rows open UPWARDS (bottom-full mb-2.5).
+  const verticalClass = isForwardRow ? "top-full mt-2.5" : "bottom-full mb-2.5";
+
+  // Prevent horizontal overflow on pitch sides
+  const horizontalClass =
+    horizontalAlign === "left"
+      ? "left-0 sm:left-[-12px]"
+      : horizontalAlign === "right"
+      ? "right-0 sm:right-[-12px]"
+      : "left-1/2 -translate-x-1/2";
 
   return (
     <div className="relative flex flex-col items-center group cursor-pointer transition-transform duration-150 hover:scale-105">
@@ -148,72 +202,100 @@ const PlayerPitchPin: React.FC<PlayerPitchPinProps> = ({ player, isGK }) => {
       </div>
 
       {/* Name and club label */}
-      <div className="mt-1 text-center max-w-[84px] sm:max-w-[104px]">
-        <p className="text-[11px] sm:text-xs font-bold leading-tight truncate px-1 py-0.5 bg-black/70 rounded backdrop-blur-xs text-white">
-          {player.name.split(" ").slice(-1)[0]}
+      <div className="mt-1 text-center max-w-[88px] sm:max-w-[108px]">
+        <p className="text-[11px] sm:text-xs font-bold leading-tight truncate px-1.5 py-0.5 bg-black/80 rounded backdrop-blur-xs text-white shadow-xs border border-white/10">
+          {displayName}
         </p>
+        <div className="text-[10px] text-emerald-200 font-medium truncate max-w-[88px] sm:max-w-[108px] mt-0.5">
+          {player.club}
+        </div>
         <div className="mt-0.5 flex items-center justify-center gap-1">
-          <span className="text-[9px] font-black tracking-tight px-1.5 py-0.2 rounded-full bg-emerald-950/80 border border-emerald-400/40 text-emerald-300 shadow-xs">
+          <span className="text-[9px] font-black tracking-tight px-1.5 py-0.2 rounded-full bg-emerald-950/85 border border-emerald-400/40 text-emerald-300 shadow-xs">
             {player.projectedPoints} pts
           </span>
           {player.isCaptain && (
-            <span className="text-[8px] font-bold text-amber-300">
+            <span className="text-[8px] font-bold text-amber-300 bg-amber-950/70 px-1 rounded border border-amber-400/40">
               2x
             </span>
           )}
         </div>
       </div>
 
-      {/* Interactive Hover Breakdown Popover */}
-      <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col w-48 bg-neutral-900/95 border border-neutral-700 text-white rounded-xl p-2.5 shadow-2xl z-50 pointer-events-none text-left backdrop-blur-md">
-        <div className="flex items-center justify-between pb-1.5 border-b border-neutral-700/70">
-          <span className="font-bold text-xs truncate text-emerald-300">{player.name}</span>
-          <span className="font-mono text-xs font-black text-amber-400">{player.projectedPoints} pts</span>
+      {/* Interactive Hover Breakdown Popover: Never cut off, shows full clean name and pronounced metadata */}
+      <div
+        className={`absolute ${verticalClass} ${horizontalClass} hidden group-hover:flex flex-col w-64 sm:w-72 bg-neutral-900/98 border border-neutral-700/80 text-white rounded-xl p-3 shadow-2xl z-50 pointer-events-none text-left backdrop-blur-md transition-opacity`}
+      >
+        {/* Popover Header: Full player name (no truncation) + Points */}
+        <div className="pb-2 border-b border-neutral-700/70">
+          <div className="flex items-start justify-between gap-2">
+            <h4 className="font-bold text-sm text-emerald-300 leading-snug whitespace-normal break-words">
+              {cleanFullName}
+            </h4>
+            <span className="font-mono text-xs font-black text-amber-400 shrink-0 bg-neutral-800/90 px-1.5 py-0.5 rounded border border-neutral-700">
+              {player.projectedPoints} pts
+            </span>
+          </div>
+
+          {/* Pronounced League/Country and Club Name beside/under player name */}
+          <div className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-neutral-200 flex-wrap">
+            <span className="text-emerald-300 font-semibold px-2 py-0.5 rounded-md bg-emerald-950/90 border border-emerald-500/40 shadow-2xs">
+              {player.club}
+            </span>
+            <span className="text-neutral-400">•</span>
+            <span className="text-neutral-300 font-normal">
+              {player.countryOrLeague}
+            </span>
+          </div>
         </div>
-        <div className="mt-1.5 space-y-1 text-[10px] text-neutral-300">
-          <div className="flex justify-between">
+
+        {/* Detailed Breakdown */}
+        <div className="mt-2 space-y-1.5 text-[11px] text-neutral-300">
+          <div className="flex justify-between items-center">
             <span>Appearance (1 pt):</span>
             <span className="font-mono text-emerald-400">+{bd?.appearance ?? 1}</span>
           </div>
-          <div className="flex justify-between">
+          <div className="flex justify-between items-center">
             <span>60+ Mins on Pitch (2 pts):</span>
             <span className="font-mono text-emerald-400">+{bd?.minutes60Plus ?? 2}</span>
           </div>
           {Boolean(bd?.goals) && (
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span>Goals ({player.position === 'FORWARD' ? '4' : player.position === 'MIDFIELDER' ? '5' : '6'} pts/ea):</span>
               <span className="font-mono text-emerald-400">+{bd?.goals}</span>
             </div>
           )}
           {Boolean(bd?.cleanSheet) && (
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span>Clean Sheet (6 pts):</span>
               <span className="font-mono text-emerald-400">+{bd?.cleanSheet}</span>
             </div>
           )}
           {Boolean(bd?.assists) && (
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span>Assists (3 pts/ea):</span>
               <span className="font-mono text-emerald-400">+{bd?.assists}</span>
             </div>
           )}
           {Boolean(bd?.hatTrickBonus) && (
-            <div className="flex justify-between text-amber-300 font-bold">
+            <div className="flex justify-between items-center text-amber-300 font-bold">
               <span>Hat-trick Multiplier:</span>
               <span className="font-mono">x1.5</span>
             </div>
           )}
           {player.isCaptain && (
-            <div className="flex justify-between text-amber-300 font-bold pt-1 border-t border-neutral-800">
+            <div className="flex justify-between items-center text-amber-300 font-bold pt-1 border-t border-neutral-800">
               <span>Captain Multiplier:</span>
               <span className="font-mono">x2.0</span>
             </div>
           )}
         </div>
-        <div className="mt-1.5 pt-1 border-t border-neutral-800 text-[9px] text-neutral-400 italic">
+
+        {/* Analysis reason */}
+        <div className="mt-2 pt-1.5 border-t border-neutral-800 text-[10px] text-neutral-300 italic whitespace-normal break-words">
           {player.analysisReason}
         </div>
       </div>
     </div>
   );
 };
+

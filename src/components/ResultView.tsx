@@ -6,6 +6,7 @@ import {
   PlayerStatus
 } from "../types";
 import { PitchView } from "./PitchView";
+import { sanitizePlayerName } from "../utils/playerSanitizer";
 import {
   RotateCcw,
   Sparkles,
@@ -97,6 +98,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
     const isCap = player.isCaptain || player.id === captain.id;
     const isVc = player.isViceCaptain || player.id === viceCaptain.id;
     const bd = player.pointBreakdown;
+    const cleanName = sanitizePlayerName(player.name, player.club, player.position);
 
     return (
       <div
@@ -108,12 +110,14 @@ export const ResultView: React.FC<ResultViewProps> = ({
             {index}.
           </span>
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-baseline gap-2 flex-wrap">
               <span className="font-bold text-neutral-900 dark:text-white text-sm sm:text-base">
-                {player.name}
+                {cleanName}
               </span>
-              <span className="text-xs text-neutral-500 dark:text-neutral-400 font-normal">
-                — {player.countryOrLeague}, {player.club}
+              <span className="text-xs sm:text-sm font-medium text-neutral-600 dark:text-neutral-300">
+                — <span className="text-neutral-700 dark:text-neutral-200">{player.countryOrLeague}</span>
+                <span className="text-neutral-400 mx-1.5">•</span>
+                <span className="text-emerald-700 dark:text-emerald-400 font-semibold">{player.club}</span>
               </span>
 
               {isCap && (
@@ -252,10 +256,12 @@ export const ResultView: React.FC<ResultViewProps> = ({
                 <span>CAPTAIN</span>
               </div>
               <p className="font-bold text-neutral-900 dark:text-white text-base mt-0.5">
-                {captain.name}
+                {sanitizePlayerName(captain.name, captain.club, captain.position)}
               </p>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                {captain.countryOrLeague}, {captain.club}
+              <p className="text-xs sm:text-sm font-medium text-neutral-600 dark:text-neutral-300 mt-0.5">
+                <span className="text-neutral-800 dark:text-neutral-200">{captain.countryOrLeague}</span>
+                <span className="text-neutral-400 mx-1.5">•</span>
+                <span className="text-emerald-700 dark:text-emerald-400 font-semibold">{captain.club}</span>
               </p>
               <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium mt-0.5">
                 Highest projected output (~{captain.projectedPoints * 2} pts with double)
@@ -268,10 +274,12 @@ export const ResultView: React.FC<ResultViewProps> = ({
                 <span>VICE-CAPTAIN</span>
               </div>
               <p className="font-bold text-neutral-900 dark:text-white text-base mt-0.5">
-                {viceCaptain.name}
+                {sanitizePlayerName(viceCaptain.name, viceCaptain.club, viceCaptain.position)}
               </p>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                {viceCaptain.countryOrLeague}, {viceCaptain.club}
+              <p className="text-xs sm:text-sm font-medium text-neutral-600 dark:text-neutral-300 mt-0.5">
+                <span className="text-neutral-800 dark:text-neutral-200">{viceCaptain.countryOrLeague}</span>
+                <span className="text-neutral-400 mx-1.5">•</span>
+                <span className="text-emerald-700 dark:text-emerald-400 font-semibold">{viceCaptain.club}</span>
               </p>
             </div>
           </div>

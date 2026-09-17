@@ -266,7 +266,11 @@ export const UpcomingMatchesView: React.FC<UpcomingMatchesViewProps> = ({
             }`}
           >
             <Radio className="w-3 h-3 text-emerald-600" />
-            <span>Today's Fixtures ({totalFoundInWorld})</span>
+            <span>
+              {selectedDate === new Date().toISOString().split("T")[0]
+                ? `Today's Fixtures (${totalFoundInWorld})`
+                : `Fixtures for ${selectedDate} (${totalFoundInWorld})`}
+            </span>
           </button>
 
           <button
@@ -558,7 +562,7 @@ export const UpcomingMatchesView: React.FC<UpcomingMatchesViewProps> = ({
                 onClick={() => handleApplyPreset(TIME_PRESETS[4])}
                 className="px-3.5 py-2 text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 rounded-xl transition-all cursor-pointer"
               >
-                Show All Matches Today ({totalFoundInWorld})
+                Show All Matches on this Date ({totalFoundInWorld})
               </button>
               <button
                 type="button"

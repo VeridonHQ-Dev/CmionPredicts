@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { GoogleGenAI } from "@google/genai";
+import { sanitizePlayerName, getPitchDisplayName, findClubRoster, getAuthenticPlayerName } from "../src/utils/playerSanitizer";
 
 // Configure maximum execution duration on Vercel
 export const maxDuration = 60;
@@ -152,16 +153,21 @@ export function extractTeamsAndMatches(input: string): { teams: string[]; fixtur
   const teamsSet = new Set<string>();
   const fixtures: Array<{ home: string; away?: string }> = [];
 
-  for (const line of rawLines) {
-    if (line.includes(',') && !line.toLowerCase().includes('vs')) {
+  for (const rawLine of rawLines) {
+    // Strip parenthetical text e.g. "(8:00pm • Premier League)" or "(Carabao Cup)"
+    let line = rawLine.replace(/\[.*?\]|\(.*?\)/g, "").trim();
+
+    if (line.includes(',') && !/\b(?:vs\.?|vrs\.?|versus)\b/i.test(line)) {
       const parts = line.split(',').map(p => p.trim()).filter(Boolean);
       for (const p of parts) {
-        teamsSet.add(cleanTeamName(p));
+        const cleanedPart = cleanTeamName(p);
+        if (cleanedPart) teamsSet.add(cleanedPart);
       }
       continue;
     }
 
-    const vsMatch = line.match(/^(.+?)\s+(?:vs\.?|v|-)\s+(.+)$/i);
+    // Match "vs", "vrs", "versus", "v", or "-" separator
+    const vsMatch = line.match(/^(.+?)\s+(?:vs\.?|vrs\.?|versus|v|-|–|—)\s+(.+)$/i);
     if (vsMatch && vsMatch[1] && vsMatch[2]) {
       const home = cleanTeamName(vsMatch[1]);
       const away = cleanTeamName(vsMatch[2]);
@@ -187,9 +193,17 @@ export function extractTeamsAndMatches(input: string): { teams: string[]; fixtur
 }
 
 export function cleanTeamName(raw: string): string {
+  if (!raw) return "";
   return raw
     .replace(/^[\d\.\-\*\•\)\s]+/, '')
     .replace(/\[.*?\]|\(.*?\)/g, '')
+    // Remove kickoff times e.g. "8:00pm", "7:45 pm", "20:00", "@ 8:00pm"
+    .replace(/(?:@\s*)?\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/gi, '')
+    .replace(/\b\d{1,2}:\d{2}\b/g, '')
+    // Remove competition markers
+    .replace(/\b(Premier League|Carabao Cup|EFL Cup|FA Cup|Champions League|Europa League|Serie A|La Liga|Bundesliga|Ligue 1|Scottish Premiership|Primeira Liga)\b/gi, '')
+    // Remove leading/trailing separators
+    .replace(/^[\s\-–—:•·|]+|[\s\-–—:•·|]+$/g, '')
     .trim();
 }
 
@@ -329,109 +343,121 @@ function generateRosterForTeam(teamName: string): TeamRosterProfile {
     }
   }
 
-  let league = "European Competition / National League";
-  if (/luton|stevenage|chelsea|city|tottenham|newcastle|aston/i.test(teamName)) {
-    league = "England, Football League";
-  } else if (/panathinaikos|kifisia|olympiacos|aek|paok/i.test(teamName)) {
-    league = "Greece, Super League";
-  } else if (/estrela|braga|benfica|porto|sporting/i.test(teamName)) {
-    league = "Portugal, Primeira Liga";
-  } else if (/inter|juventus|milan|napoli|roma|lazio/i.test(teamName)) {
-    league = "Italy, Serie A";
+  // Look up in extensive real club rosters database
+  const rosterData = findClubRoster(teamName);
+  let league = rosterData?.league || "European Competition / National League";
+  if (!rosterData) {
+    if (/luton|stevenage|chelsea|city|tottenham|newcastle|aston|everton|norwich|watford|coventry|fleetwood/i.test(teamName)) {
+      league = "England, Football League";
+    } else if (/panathinaikos|kifisia|olympiacos|aek|paok/i.test(teamName)) {
+      league = "Greece, Super League";
+    } else if (/estrela|braga|benfica|porto|sporting/i.test(teamName)) {
+      league = "Portugal, Primeira Liga";
+    } else if (/inter|juventus|milan|napoli|roma|lazio/i.test(teamName)) {
+      league = "Italy, Serie A";
+    }
   }
+
+  // Pick authentic real footballer names — never position labels or club names!
+  const nameGK = rosterData?.players.goalkeepers[0] || getAuthenticPlayerName("GOALKEEPER", teamName, 0);
+  const nameDEF1 = rosterData?.players.defenders[0] || getAuthenticPlayerName("DEFENDER", teamName, 0);
+  const nameDEF2 = rosterData?.players.defenders[1] || getAuthenticPlayerName("DEFENDER", teamName, 1);
+  const nameMID1 = rosterData?.players.midfielders[0] || getAuthenticPlayerName("MIDFIELDER", teamName, 0);
+  const nameMID2 = rosterData?.players.midfielders[1] || getAuthenticPlayerName("MIDFIELDER", teamName, 1);
+  const nameFWD = rosterData?.players.forwards[0] || getAuthenticPlayerName("FORWARD", teamName, 0);
 
   return {
     countryOrLeague: league,
     players: [
       {
-        name: `${teamName} #1 GK`,
+        name: nameGK,
         position: "GOALKEEPER",
         role: "GK",
-        avgRating: 7.4,
-        recentRatings: [7.5, 7.2, 7.8, 7.3, 7.4],
+        avgRating: 7.5,
+        recentRatings: [7.6, 7.3, 7.8, 7.4, 7.5],
         goals: 0,
         assists: 0,
         chancesCreated: 0,
         cleanSheets: 2,
         saves: 16,
-        startingProbability: 92,
+        startingProbability: 95,
         status: "STARTING",
         statusText: "Regular first-choice goalkeeper",
         fitness: "100% Fit",
         reason: `Reliable under high pressure for ${teamName}.`
       },
       {
-        name: `${teamName} Lead Defender`,
+        name: nameDEF1,
         position: "DEFENDER",
         role: "CB",
-        avgRating: 7.6,
-        recentRatings: [7.8, 7.4, 7.9, 7.3, 7.5],
+        avgRating: 7.7,
+        recentRatings: [7.8, 7.5, 8.0, 7.4, 7.6],
         goals: 1,
         assists: 1,
         chancesCreated: 4,
         cleanSheets: 2,
-        startingProbability: 90,
+        startingProbability: 92,
         status: "STARTING",
         statusText: "Defensive linchpin",
         fitness: "Optimal",
         reason: "Leader in clearances and aerial duels."
       },
       {
-        name: `${teamName} Wing Back`,
+        name: nameDEF2,
         position: "DEFENDER",
         role: "LB",
-        avgRating: 7.5,
-        recentRatings: [7.6, 7.3, 7.8, 7.4, 7.5],
+        avgRating: 7.6,
+        recentRatings: [7.7, 7.3, 7.8, 7.5, 7.6],
         goals: 0,
         assists: 2,
         chancesCreated: 8,
         cleanSheets: 2,
-        startingProbability: 88,
+        startingProbability: 90,
         status: "EXPECTED_STARTER",
         statusText: "Attacking full-back",
         fitness: "Fit",
         reason: "Active runner providing width on the flanks."
       },
       {
-        name: `${teamName} Playmaker`,
+        name: nameMID1,
         position: "MIDFIELDER",
         role: "CAM",
-        avgRating: 8.0,
-        recentRatings: [8.3, 7.8, 8.4, 7.7, 8.0],
+        avgRating: 8.2,
+        recentRatings: [8.5, 8.0, 8.6, 7.9, 8.2],
         goals: 2,
         assists: 3,
-        chancesCreated: 15,
-        startingProbability: 94,
+        chancesCreated: 16,
+        startingProbability: 96,
         status: "STARTING",
         statusText: "Creative talisman",
         fitness: "100% Match Fit",
         reason: `Main catalyst for ${teamName}'s goal-scoring chances.`
       },
       {
-        name: `${teamName} Box-to-Box`,
+        name: nameMID2,
         position: "MIDFIELDER",
         role: "CM",
-        avgRating: 7.6,
-        recentRatings: [7.7, 7.4, 7.9, 7.5, 7.6],
+        avgRating: 7.8,
+        recentRatings: [7.9, 7.6, 8.1, 7.5, 7.8],
         goals: 1,
         assists: 2,
         chancesCreated: 9,
-        startingProbability: 88,
+        startingProbability: 90,
         status: "STARTING",
         statusText: "Midfield anchor",
         fitness: "Fit",
         reason: "Wins possession and transitions rapidly."
       },
       {
-        name: `${teamName} Top Striker`,
+        name: nameFWD,
         position: "FORWARD",
         role: "ST",
-        avgRating: 8.2,
-        recentRatings: [8.5, 7.9, 8.6, 7.8, 8.1],
+        avgRating: 8.5,
+        recentRatings: [8.7, 8.2, 8.9, 8.0, 8.4],
         goals: 4,
         assists: 1,
-        chancesCreated: 7,
-        startingProbability: 92,
+        chancesCreated: 8,
+        startingProbability: 95,
         status: "STARTING",
         statusText: "Key finisher",
         fitness: "Optimal",
@@ -565,6 +591,15 @@ MANDATORY CRITERIA & SELECTION GUARDRAILS:
    - Exactly 5 MIDFIELDERS
    - Exactly 3 FORWARDS
    (Total 15 players).
+   CRITICAL MANDATORY REQUIREMENT — ZERO DUPLICATE PLAYERS:
+   - Every single one of the 15 players MUST be a completely DIFFERENT real-world footballer!
+   - You MUST NEVER repeat the same player across any slot or club (e.g. Kevin De Bruyne or Erling Haaland must appear at most ONCE, never twice or thrice).
+   - In MIDFIELDERS — 5: all 5 midfielders MUST be 5 completely DIFFERENT players.
+   - In FORWARDS — 3: all 3 forwards MUST be 3 completely DIFFERENT players.
+   - In DEFENDERS — 5: all 5 defenders MUST be 5 completely DIFFERENT players.
+   - In GOALKEEPERS — 2: both goalkeepers MUST be 2 completely DIFFERENT players.
+   - Every player MUST play for their actual club from the list of clubs in the input matches: ${JSON.stringify(identifiedTeams)}.
+   - Every player MUST be part of that club's confirmed Starting 11 (projected 60+ minutes on pitch).
 5. Evaluate all 6 formations: 4-4-2, 3-5-2, 4-3-3, 3-4-3, 5-3-2, 4-5-1.
    Pick the best formation (aiming for highest fantasy projection around 150 points).
 6. Designate:
@@ -688,10 +723,13 @@ function normalizeAiPlayer(p: any, idx: number, defaultClub: string): PlayerPred
     ? p.status
     : 'STARTING';
 
+  const club = cleanTeamName(p.club || defaultClub || "Selected Club");
+  const cleanName = sanitizePlayerName(p.name, club, pos);
+
   return {
     id: p.id || `ai_player_${idx}`,
-    name: p.name || `Player ${idx + 1}`,
-    club: p.club || defaultClub || "Selected Club",
+    name: cleanName,
+    club,
     countryOrLeague: p.countryOrLeague || "European Football",
     position: pos,
     status,
@@ -736,7 +774,16 @@ function formatAiResult(aiData: any, teams: string[], rawFixtures: Array<{ home:
   const mids = normalizedPlayers.filter(p => p.position === 'MIDFIELDER');
   const fwds = normalizedPlayers.filter(p => p.position === 'FORWARD');
 
-  if (gks.length !== 2 || defs.length !== 5 || mids.length !== 5 || fwds.length !== 3) {
+  // Verify all 15 players have unique names (no player repeated across slots)
+  const seenPlayerNames = new Set<string>();
+  const hasDuplicatePlayers = normalizedPlayers.some(p => {
+    const key = p.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (seenPlayerNames.has(key)) return true;
+    seenPlayerNames.add(key);
+    return false;
+  });
+
+  if (hasDuplicatePlayers || gks.length !== 2 || defs.length !== 5 || mids.length !== 5 || fwds.length !== 3) {
     return buildStatisticalPrediction(teams, rawFixtures);
   }
 
@@ -899,12 +946,148 @@ function formatAiResult(aiData: any, teams: string[], rawFixtures: Array<{ home:
   };
 }
 
-function buildStatisticalPrediction(teams: string[], _inputFixtures: Array<{ home: string; away?: string }>): SquadPredictionResponse {
-  const poolGKs: PlayerPrediction[] = [];
-  const poolDEFs: PlayerPrediction[] = [];
-  const poolMIDs: PlayerPrediction[] = [];
-  const poolFWDs: PlayerPrediction[] = [];
+function selectUniqueStartingSquadFromClubs(
+  teams: string[],
+  createdFixtures: FixtureInfo[],
+  pairedFixtures: Array<{ home: string; away: string }>
+): {
+  selectedGKs: PlayerPrediction[];
+  selectedDEFs: PlayerPrediction[];
+  selectedMIDs: PlayerPrediction[];
+  selectedFWDs: PlayerPrediction[];
+} {
+  const activeClubs = (teams.length > 0 ? teams : ["Chelsea", "Manchester City"])
+    .map(t => cleanTeamName(t))
+    .filter(Boolean);
 
+  const usedPlayerKeys = new Set<string>();
+  const normKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const buildPlayer = (
+    playerName: string,
+    clubName: string,
+    pos: Position,
+    idx: number
+  ): PlayerPrediction => {
+    const roster = findClubRoster(clubName);
+    const league = roster?.league || "Top Division";
+    const opponent =
+      pairedFixtures.find(f => f.home === clubName)?.away ||
+      pairedFixtures.find(f => f.away === clubName)?.home ||
+      "Scheduled Opponent";
+
+    const isDefOrGk = pos === "GOALKEEPER" || pos === "DEFENDER";
+    const cleanSheets = isDefOrGk ? 3 : 0;
+    const goals = pos === "FORWARD" ? 3 : pos === "MIDFIELDER" ? 2 : (pos === "DEFENDER" ? 1 : 0);
+    const assists = pos === "MIDFIELDER" ? 3 : (pos === "DEFENDER" || pos === "FORWARD" ? 1 : 0);
+    const avgRating = pos === "FORWARD" ? 8.6 : pos === "MIDFIELDER" ? 8.3 : pos === "DEFENDER" ? 8.0 : 7.8;
+
+    const calc = calculateFantasyPlayerScore({
+      position: pos,
+      minutes: 90,
+      goals: goals > 2 ? 1 : 0,
+      assists: assists > 2 ? 1 : 0,
+      cleanSheet: isDefOrGk,
+      isCaptain: false
+    });
+
+    return {
+      id: `${normKey(clubName)}_${normKey(playerName)}_${idx}`,
+      name: sanitizePlayerName(playerName, clubName, pos),
+      club: cleanTeamName(clubName),
+      countryOrLeague: league,
+      position: pos,
+      status: "STARTING",
+      statusText: "Confirmed Starting XI",
+      formRating: avgRating,
+      projectedPoints: calc.points,
+      pointBreakdown: calc.breakdown,
+      projectedMinutes: 90,
+      projectedGoals: goals > 2 ? 1 : 0,
+      projectedAssists: assists > 2 ? 1 : 0,
+      projectedCleanSheet: isDefOrGk,
+      projectedHatTrick: false,
+      startingProbability: 97,
+      fitnessStatus: "100% Match Fit",
+      upcomingMatch: {
+        opponent,
+        isHome: true,
+        competition: "Matchday Fixture",
+        kickoffDate: createdFixtures[0]?.kickoffDate || new Date(Date.now() + 86400000).toISOString().split('T')[0],
+        kickoffTime: "20:00",
+        difficulty: 3
+      },
+      stats: {
+        matchesAnalyzed: 5,
+        avgRating,
+        minutesPlayedAvg: 89,
+        goals,
+        assists,
+        chancesCreated: pos === "MIDFIELDER" ? 18 : 6,
+        cleanSheets,
+        saves: pos === "GOALKEEPER" ? 19 : 0,
+        xG: pos === "FORWARD" ? 2.8 : 0.6,
+        xA: pos === "MIDFIELDER" ? 2.6 : 0.4,
+        recentRatings: [avgRating - 0.2, avgRating + 0.3, avgRating, avgRating - 0.1, avgRating + 0.1]
+      },
+      roleOnPitch: pos === "GOALKEEPER" ? "GK" : pos === "DEFENDER" ? (idx % 2 === 0 ? "CB" : "RB") : pos === "MIDFIELDER" ? (idx % 2 === 0 ? "CAM" : "CM") : "ST",
+      analysisReason: `Confirmed regular in Starting 11 for ${clubName} with optimal match fitness and high tactical impact.`
+    };
+  };
+
+  const selectedGKs: PlayerPrediction[] = [];
+  const selectedDEFs: PlayerPrediction[] = [];
+  const selectedMIDs: PlayerPrediction[] = [];
+  const selectedFWDs: PlayerPrediction[] = [];
+
+  const pickNextPlayer = (pos: Position, targetCount: number, list: PlayerPrediction[]) => {
+    let clubIdx = 0;
+    let loopCount = 0;
+    while (list.length < targetCount && loopCount < 100) {
+      loopCount++;
+      const currentClub = activeClubs[clubIdx % activeClubs.length];
+      const roster = findClubRoster(currentClub);
+      const candidates = roster ? (
+        pos === "GOALKEEPER" ? roster.players.goalkeepers :
+        pos === "DEFENDER" ? roster.players.defenders :
+        pos === "MIDFIELDER" ? roster.players.midfielders :
+        roster.players.forwards
+      ) : [];
+
+      let picked = false;
+      for (let i = 0; i < candidates.length; i++) {
+        const candidate = candidates[i];
+        const key = normKey(candidate);
+        if (!usedPlayerKeys.has(key)) {
+          usedPlayerKeys.add(key);
+          list.push(buildPlayer(candidate, currentClub, pos, list.length));
+          picked = true;
+          break;
+        }
+      }
+
+      if (!picked && loopCount > activeClubs.length * 2) {
+        const fallbackName = getAuthenticPlayerName(pos, currentClub, list.length, usedPlayerKeys);
+        const key = normKey(fallbackName);
+        if (!usedPlayerKeys.has(key)) {
+          usedPlayerKeys.add(key);
+          list.push(buildPlayer(fallbackName, currentClub, pos, list.length));
+        }
+      }
+
+      clubIdx++;
+    }
+  };
+
+  pickNextPlayer("GOALKEEPER", 2, selectedGKs);
+  pickNextPlayer("DEFENDER", 5, selectedDEFs);
+  pickNextPlayer("MIDFIELDER", 5, selectedMIDs);
+  pickNextPlayer("FORWARD", 3, selectedFWDs);
+
+  return { selectedGKs, selectedDEFs, selectedMIDs, selectedFWDs };
+}
+
+function buildStatisticalPrediction(teams: string[], _inputFixtures: Array<{ home: string; away?: string }>): SquadPredictionResponse {
   const createdFixtures: FixtureInfo[] = [];
 
   const pairedFixtures: Array<{ home: string; away: string }> = [];
@@ -928,87 +1111,17 @@ function buildStatisticalPrediction(teams: string[], _inputFixtures: Array<{ hom
     });
   });
 
-  teams.forEach((teamName) => {
-    const roster = generateRosterForTeam(teamName);
-    const opponent = pairedFixtures.find(f => f.home === teamName)?.away || pairedFixtures.find(f => f.away === teamName)?.home || "Opponent";
+  // Guarantee every slot has a completely unique player selected from the pasted clubs in Starting 11
+  const { selectedGKs, selectedDEFs, selectedMIDs, selectedFWDs } = selectUniqueStartingSquadFromClubs(
+    teams,
+    createdFixtures,
+    pairedFixtures
+  );
 
-    roster.players.forEach((p, pIdx) => {
-      // Baseline breakdown for initial pool sorting
-      const isDefOrGk = p.position === 'GOALKEEPER' || p.position === 'DEFENDER';
-      const initialCleanSheet = isDefOrGk && (p.cleanSheets || 0) > 0;
-      const initialCalc = calculateFantasyPlayerScore({
-        position: p.position,
-        minutes: 90,
-        goals: p.goals > 2 ? 1 : 0,
-        assists: p.assists > 2 ? 1 : 0,
-        cleanSheet: initialCleanSheet,
-        isCaptain: false
-      });
-
-      const playerObj: PlayerPrediction = {
-        id: `${teamName.toLowerCase().replace(/\s+/g, '_')}_${pIdx}`,
-        name: p.name,
-        club: teamName,
-        countryOrLeague: roster.countryOrLeague,
-        position: p.position,
-        status: "STARTING",
-        statusText: "Confirmed Starting XI",
-        formRating: p.avgRating,
-        projectedPoints: initialCalc.points,
-        pointBreakdown: initialCalc.breakdown,
-        projectedMinutes: 90,
-        projectedGoals: p.goals > 2 ? 1 : 0,
-        projectedAssists: p.assists > 2 ? 1 : 0,
-        projectedCleanSheet: initialCleanSheet,
-        projectedHatTrick: false,
-        startingProbability: Math.max(92, p.startingProbability),
-        fitnessStatus: p.fitness,
-        upcomingMatch: {
-          opponent,
-          isHome: true,
-          competition: "League Match",
-          kickoffDate: createdFixtures[0]?.kickoffDate,
-          kickoffTime: "20:00",
-          difficulty: 3
-        },
-        stats: {
-          matchesAnalyzed: p.recentRatings.length,
-          avgRating: p.avgRating,
-          minutesPlayedAvg: 88,
-          goals: p.goals,
-          assists: p.assists,
-          chancesCreated: p.chancesCreated,
-          cleanSheets: p.cleanSheets,
-          saves: p.saves,
-          xG: p.xG || parseFloat((p.goals * 0.75 + 0.2).toFixed(1)),
-          xA: p.xA || parseFloat((p.assists * 0.65 + 0.1).toFixed(1)),
-          recentRatings: p.recentRatings
-        },
-        roleOnPitch: p.role,
-        analysisReason: p.reason
-      };
-
-      if (p.position === 'GOALKEEPER') poolGKs.push(playerObj);
-      else if (p.position === 'DEFENDER') poolDEFs.push(playerObj);
-      else if (p.position === 'MIDFIELDER') poolMIDs.push(playerObj);
-      else if (p.position === 'FORWARD') poolFWDs.push(playerObj);
-    });
-  });
-
-  fillPoolIfNeeded(poolGKs, 'GOALKEEPER', 2);
-  fillPoolIfNeeded(poolDEFs, 'DEFENDER', 5);
-  fillPoolIfNeeded(poolMIDs, 'MIDFIELDER', 5);
-  fillPoolIfNeeded(poolFWDs, 'FORWARD', 3);
-
-  poolGKs.sort((a, b) => b.formRating - a.formRating);
-  poolDEFs.sort((a, b) => (b.formRating + (b.stats.assists || 0)) - (a.formRating + (a.stats.assists || 0)));
-  poolMIDs.sort((a, b) => (b.formRating + (b.stats.goals || 0) + (b.stats.assists || 0)) - (a.formRating + (a.stats.goals || 0) + (a.stats.assists || 0)));
-  poolFWDs.sort((a, b) => (b.formRating + (b.stats.goals * 2)) - (a.formRating + (a.stats.goals * 2)));
-
-  const selectedGKs = poolGKs.slice(0, 2);
-  const selectedDEFs = poolDEFs.slice(0, 5);
-  const selectedMIDs = poolMIDs.slice(0, 5);
-  const selectedFWDs = poolFWDs.slice(0, 3);
+  selectedGKs.sort((a, b) => b.formRating - a.formRating);
+  selectedDEFs.sort((a, b) => (b.formRating + (b.stats.assists || 0)) - (a.formRating + (a.stats.assists || 0)));
+  selectedMIDs.sort((a, b) => (b.formRating + (b.stats.goals || 0) + (b.stats.assists || 0)) - (a.formRating + (a.stats.goals || 0) + (a.stats.assists || 0)));
+  selectedFWDs.sort((a, b) => (b.formRating + (b.stats.goals * 2)) - (a.formRating + (a.stats.goals * 2)));
 
   // Best formation evaluation
   // Calibrated distribution targeting ~150 points across the Starting XI
@@ -1278,77 +1391,6 @@ function buildStatisticalPrediction(teams: string[], _inputFixtures: Array<{ hom
     },
     disclaimer: "Predictions are based on current form, recent performance, player fitness, availability, expected lineup and fixture conditions. Football results are unpredictable and projected points are not guaranteed."
   };
-}
-
-function fillPoolIfNeeded(pool: PlayerPrediction[], position: Position, required: number) {
-  if (pool.length >= required) return;
-
-  const fallbackNames = {
-    GOALKEEPER: ["Jan Oblak - Spain, Atlético Madrid", "Emiliano Martínez - England, Aston Villa"],
-    DEFENDER: ["Achraf Hakimi - France, PSG", "Alessandro Bastoni - Italy, Inter Milan", "Jeremie Frimpong - Germany, Leverkusen", "Theo Hernández - Italy, AC Milan", "Gvardiol - England, Man City"],
-    MIDFIELDER: ["Florian Wirtz - Germany, Leverkusen", "Rodri - England, Man City", "Hakan Çalhanoğlu - Italy, Inter Milan", "Vitinha - France, PSG", "Cole Palmer - England, Chelsea"],
-    FORWARD: ["Erling Haaland - England, Man City", "Lautaro Martínez - Italy, Inter Milan", "Viktor Gyökeres - Portugal, Sporting CP"]
-  };
-
-  const fallbacks = fallbackNames[position] || [];
-  let idx = 0;
-
-  while (pool.length < required) {
-    const raw = fallbacks[idx % fallbacks.length] || `Auxiliary ${position}`;
-    const [name, clubCountry] = raw.includes(' - ') ? raw.split(' - ') : [raw, "European League, Club"];
-    const [countryOrLeague, club] = clubCountry.includes(', ') ? clubCountry.split(', ') : ["Top League", clubCountry];
-
-    const goals = position === 'FORWARD' ? 3 : position === 'MIDFIELDER' ? 2 : 0;
-    const assists = position === 'MIDFIELDER' ? 3 : 1;
-    const cleanSheets = (position === 'DEFENDER' || position === 'GOALKEEPER') ? 3 : 0;
-    const calc = calculateFantasyPlayerScore({
-      position,
-      minutes: 90,
-      goals: goals > 2 ? 1 : 0,
-      assists: assists > 2 ? 1 : 0,
-      cleanSheet: cleanSheets > 0,
-      isCaptain: false
-    });
-
-    pool.push({
-      id: `aux_${position.toLowerCase()}_${pool.length}`,
-      name,
-      club: club || "Top Club",
-      countryOrLeague: countryOrLeague || "Europe",
-      position,
-      status: "STARTING",
-      statusText: "Confirmed Starting XI",
-      formRating: 7.9,
-      projectedPoints: calc.points,
-      pointBreakdown: calc.breakdown,
-      projectedMinutes: 90,
-      projectedGoals: goals > 2 ? 1 : 0,
-      projectedAssists: assists > 2 ? 1 : 0,
-      projectedCleanSheet: cleanSheets > 0,
-      projectedHatTrick: false,
-      startingProbability: 95,
-      fitnessStatus: "100% Fit",
-      upcomingMatch: {
-        opponent: "Scheduled Opponent",
-        isHome: true,
-        competition: "League Fixture",
-        difficulty: 3
-      },
-      stats: {
-        matchesAnalyzed: 5,
-        avgRating: 7.9,
-        minutesPlayedAvg: 90,
-        goals,
-        assists,
-        chancesCreated: 12,
-        cleanSheets,
-        saves: position === 'GOALKEEPER' ? 17 : 0,
-        recentRatings: [7.8, 8.1, 7.7, 8.0, 7.9]
-      },
-      analysisReason: "Outstanding statistical stability and confirmed starting spot across last 5 matches."
-    });
-    idx++;
-  }
 }
 
 // VERCEL SERVERLESS FUNCTION HANDLER
