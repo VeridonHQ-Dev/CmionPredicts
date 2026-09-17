@@ -86,8 +86,12 @@ export default function App() {
             if (errorData.error) message = errorData.error;
             else if (errorData.details) message = `${errorData.error || "Error"}: ${errorData.details}`;
           } catch {
-            if (rawText && rawText.length < 300 && !rawText.includes("<!DOCTYPE")) {
-              message = `Server (${res.status}): ${rawText}`;
+            if (rawText) {
+              if (rawText.includes("FUNCTION_INVOCATION_FAILED")) {
+                message = "Vercel Serverless Function error (FUNCTION_INVOCATION_FAILED). Ensure your latest code is pushed and verify GEMINI_API_KEY in Vercel Settings > Environment Variables.";
+              } else if (rawText.length < 300 && !rawText.includes("<!DOCTYPE")) {
+                message = `Server (${res.status}): ${rawText}`;
+              }
             }
           }
         } catch {
