@@ -141,37 +141,29 @@ export const ResultView: React.FC<ResultViewProps> = ({
               {bd && (
                 <span className="text-[11px] text-neutral-600 dark:text-neutral-300 flex items-center gap-1 flex-wrap">
                   <span className="text-neutral-400 dark:text-neutral-500">•</span>
-                  <span>App: +{bd.appearance}</span>
-                  <span>•</span>
-                  <span>60+m: +{bd.minutes60Plus}</span>
-                  {bd.goals > 0 && (
+                  <span>Time: +{bd.playingTimeBonus}</span>
+                  {bd.goalBonus > 0 && (
                     <>
                       <span>•</span>
-                      <span className="font-semibold text-emerald-600 dark:text-emerald-400">Goals: +{bd.goals}</span>
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400">Goals: +{bd.goalBonus}</span>
                     </>
                   )}
-                  {bd.cleanSheet > 0 && (
+                  {bd.cleanSheetBonus > 0 && (
                     <>
                       <span>•</span>
-                      <span className="font-semibold text-blue-600 dark:text-blue-400">Clean Sheet: +{bd.cleanSheet}</span>
+                      <span className="font-semibold text-blue-600 dark:text-blue-400">Clean Sheet: +{bd.cleanSheetBonus}</span>
                     </>
                   )}
-                  {bd.assists > 0 && (
+                  {bd.assistBonus > 0 && (
                     <>
                       <span>•</span>
-                      <span className="font-semibold text-purple-600 dark:text-purple-400">Assists: +{bd.assists}</span>
+                      <span className="font-semibold text-purple-600 dark:text-purple-400">Assists: +{bd.assistBonus}</span>
                     </>
                   )}
-                  {bd.hatTrickBonus > 0 && (
+                  {bd.isDoubled && (
                     <>
                       <span>•</span>
-                      <span className="font-bold text-amber-500">Hat-trick: x1.5</span>
-                    </>
-                  )}
-                  {isCap && (
-                    <>
-                      <span>•</span>
-                      <span className="font-bold text-amber-500">Captain: x2.0</span>
+                      <span className="font-bold text-amber-500">Captain: x{bd.captainMultiplier}</span>
                     </>
                   )}
                 </span>
@@ -363,10 +355,10 @@ export const ResultView: React.FC<ResultViewProps> = ({
               <div className="p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700/80">
                 <div className="flex items-center gap-1.5 font-bold text-neutral-900 dark:text-white mb-1">
                   <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 flex items-center justify-center text-[10px] font-black">2</span>
-                  <span>~150 Pts Target Mindset</span>
+                  <span>400 Pts Upside Mindset</span>
                 </div>
                 <p className="text-neutral-600 dark:text-neutral-300 text-[11px] leading-relaxed">
-                  Engine strategically accumulates ~150 fantasy points across the Starting XI: leveraging clean-sheet defenders (6+6=12 pts), goalscoring mids (5 pts), and captaincy double (x2.0).
+                  Engine strategically accumulates fantasy points across match slates with capacity up to 400 points: selecting the best players in peak form with 2x Captaincy multiplier (or Vice-Captain if Captain doesn't play).
                 </p>
               </div>
             </div>
@@ -376,7 +368,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 font-bold text-[11px] uppercase tracking-wider">
-                    <th className="py-2.5 px-3 border-b border-neutral-200 dark:border-neutral-700">By Position</th>
+                    <th className="py-2.5 px-3 border-b border-neutral-200 dark:border-neutral-700">Scoring Event</th>
                     <th className="py-2.5 px-3 border-b border-neutral-200 dark:border-neutral-700 text-center">GK</th>
                     <th className="py-2.5 px-3 border-b border-neutral-200 dark:border-neutral-700 text-center">DEF</th>
                     <th className="py-2.5 px-3 border-b border-neutral-200 dark:border-neutral-700 text-center">MID</th>
@@ -392,37 +384,40 @@ export const ResultView: React.FC<ResultViewProps> = ({
                     <td className="py-2 px-3 text-center font-bold text-emerald-600 dark:text-emerald-400">4 pts</td>
                   </tr>
                   <tr className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
-                    <td className="py-2 px-3 font-semibold text-neutral-900 dark:text-white">Clean Sheet</td>
+                    <td className="py-2 px-3 font-semibold text-neutral-900 dark:text-white">Clean Sheet (0 goals conceded)</td>
                     <td className="py-2 px-3 text-center font-bold text-blue-600 dark:text-blue-400">6 pts</td>
                     <td className="py-2 px-3 text-center font-bold text-blue-600 dark:text-blue-400">6 pts</td>
                     <td className="py-2 px-3 text-center text-neutral-400">—</td>
                     <td className="py-2 px-3 text-center text-neutral-400">—</td>
+                  </tr>
+                  <tr className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
+                    <td className="py-2 px-3 font-semibold text-neutral-900 dark:text-white">Assist (Any position)</td>
+                    <td className="py-2 px-3 text-center font-bold text-purple-600 dark:text-purple-400">3 pts</td>
+                    <td className="py-2 px-3 text-center font-bold text-purple-600 dark:text-purple-400">3 pts</td>
+                    <td className="py-2 px-3 text-center font-bold text-purple-600 dark:text-purple-400">3 pts</td>
+                    <td className="py-2 px-3 text-center font-bold text-purple-600 dark:text-purple-400">3 pts</td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
             {/* Universal Multipliers and Bonuses */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1 text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-center">
               <div className="p-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700">
-                <span className="text-[10px] uppercase font-semibold text-neutral-400 block">Appearance</span>
-                <span className="font-bold text-neutral-900 dark:text-white text-xs">1 pt</span>
-              </div>
-              <div className="p-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700">
-                <span className="text-[10px] uppercase font-semibold text-neutral-400 block">60+ Mins Pitch</span>
+                <span className="text-[10px] uppercase font-semibold text-neutral-400 block">Play &gt; 60 Min</span>
                 <span className="font-bold text-neutral-900 dark:text-white text-xs">2 pts</span>
               </div>
               <div className="p-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700">
-                <span className="text-[10px] uppercase font-semibold text-neutral-400 block">Assist</span>
-                <span className="font-bold text-neutral-900 dark:text-white text-xs">3 pts</span>
+                <span className="text-[10px] uppercase font-semibold text-neutral-400 block">Play At All (1-60m)</span>
+                <span className="font-bold text-neutral-900 dark:text-white text-xs">1 pt</span>
+              </div>
+              <div className="p-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700">
+                <span className="text-[10px] uppercase font-semibold text-neutral-400 block">Assist Bonus</span>
+                <span className="font-bold text-neutral-900 dark:text-white text-xs">+3 pts</span>
               </div>
               <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800">
-                <span className="text-[10px] uppercase font-bold text-amber-700 dark:text-amber-400 block">Hat-trick</span>
-                <span className="font-extrabold text-amber-800 dark:text-amber-300 text-xs">x1.5 Multiplier</span>
-              </div>
-              <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 col-span-2 sm:col-span-1">
-                <span className="text-[10px] uppercase font-bold text-amber-700 dark:text-amber-400 block">Captain</span>
-                <span className="font-extrabold text-amber-800 dark:text-amber-300 text-xs">x2.0 Multiplier</span>
+                <span className="text-[10px] uppercase font-bold text-amber-700 dark:text-amber-400 block">Captain Double</span>
+                <span className="font-extrabold text-amber-800 dark:text-amber-300 text-xs">x2.0 Doubled</span>
               </div>
             </div>
           </div>

@@ -3,14 +3,13 @@ export type Position = 'GOALKEEPER' | 'DEFENDER' | 'MIDFIELDER' | 'FORWARD';
 export type PlayerStatus = 'STARTING' | 'EXPECTED_STARTER' | 'ROTATION_RISK' | 'UNAVAILABLE';
 
 export interface FantasyPointBreakdown {
-  appearance: number;        // 1 pt for appearance
-  minutes60Plus: number;     // 2 pts for 60+ mins on pitch
-  goals: number;             // Goal points: GK=6, DEF=6, MID=5, FWD=4
-  assists: number;           // Assist points: 3 pts each
-  cleanSheet: number;        // Clean sheet: GK=6, DEF=6, MID=0, FWD=0
-  hatTrickBonus: number;     // Hat-trick multiplier x1.5 bonus
-  basePoints: number;        // Subtotal before captaincy
-  captainMultiplier: number; // 2.0 if Captain, 1.0 otherwise
+  playingTimeBonus: number;  // 2 pts if >60 mins, 1 pt if played <=60 mins, 0 if didn't play
+  goalBonus: number;         // GK/DEF=6 pts each, MID=5 pts each, FWD=4 pts each
+  cleanSheetBonus: number;   // GK/DEF only: +6 pts (0 goals conceded)
+  assistBonus: number;       // +3 pts each (any position)
+  basePoints: number;        // Subtotal before captaincy (cannot go below 0)
+  isDoubled: boolean;        // true if captain (or vice-captain if captain didn't play)
+  captainMultiplier: number; // 2.0 if doubled, 1.0 otherwise
   totalPoints: number;       // Final calculated fantasy points
 }
 
@@ -122,14 +121,18 @@ export interface UpcomingMatchesResponse {
 export interface ScoringGuardrails {
   starting11Rule: string;
   targetPoints: number;
+  peakCeilingPoints?: number;
   scoringMatrix: {
-    appearance: number; // 1 pt
-    minutes60Plus: number; // 2 pts
+    playingTime: {
+      moreThan60Min: number; // 2 pts
+      playedAtAll: number;   // 1 pt
+      didNotPlay: number;    // 0 pts
+    };
     goals: { GK: number; DEF: number; MID: number; FWD: number }; // GK:6, DEF:6, MID:5, FWD:4
     cleanSheets: { GK: number; DEF: number; MID: number; FWD: number }; // GK:6, DEF:6, MID:0, FWD:0
-    assists: number; // 3 pts
-    hatTrickMultiplier: number; // x1.5
-    captainMultiplier: number; // x2.0
+    assists: number; // 3 pts (any position)
+    captainMultiplier: number; // x2.0 (or vice-captain if captain didn't play)
+    minFloor: number; // 0 pts (cannot go below 0)
   };
   mindset: string;
 }
